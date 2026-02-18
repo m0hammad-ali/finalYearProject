@@ -4,6 +4,7 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { getPool } from '../db';
 import { z } from 'zod';
 
 const inventorySchema = z.object({
@@ -20,6 +21,7 @@ const inventorySchema = z.object({
 export const inventoryRoutes: FastifyPluginAsync = async (app) => {
   // Get all inventory (public view)
   app.get('/', async (request, reply) => {
+    const db = getPool();
     const {
       minPrice,
       maxPrice,
@@ -91,7 +93,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
     values.push(parseInt(limit, 10), parseInt(offset, 10));
 
-    const result = await app.db.query(query, values);
+    const result = await db.query(query, values);
 
     return reply.send({
       success: true,
@@ -102,9 +104,10 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   // Get inventory by ID
   app.get('/:id', async (request, reply) => {
+    const db = getPool();
     const { id } = request.params as { id: string };
 
-    const result = await app.db.query(
+    const result = await db.query(
       `
       SELECT 
         i.*,
@@ -139,9 +142,10 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   // Get vendor's inventory (protected route - would require auth)
   app.get('/vendor/:vendorId', async (request, reply) => {
+    const db = getPool();
     const { vendorId } = request.params as { vendorId: string };
 
-    const result = await app.db.query(
+    const result = await db.query(
       `
       SELECT 
         i.*,
@@ -166,11 +170,12 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   // Create inventory item (protected route)
   app.post('/', async (request, reply) => {
+    const db = getPool();
     // In production, extract vendor_id from JWT token
     const body = inventorySchema.parse(request.body);
     const vendorId = 'vendor-uuid-from-jwt'; // Placeholder
 
-    const result = await app.db.query(
+    const result = await db.query(
       `INSERT INTO inventory (
         vendor_id, model_id, unit_price, original_price, 
         discount_percentage, stock_quantity, condition_type, 
@@ -198,6 +203,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   // Update inventory
   app.put('/:id', async (request, reply) => {
+    const db = getPool();
     const { id } = request.params as { id: string };
     const body = inventorySchema.partial().parse(request.body);
 
@@ -222,7 +228,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
     values.push(id);
 
-    const result = await app.db.query(
+    const result = await db.query(
       `UPDATE inventory SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP
        WHERE inventory_id = $${paramIndex}
        RETURNING *`,
@@ -237,9 +243,10 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   // Delete inventory
   app.delete('/:id', async (request, reply) => {
+    const db = getPool();
     const { id } = request.params as { id: string };
 
-    const result = await app.db.query(
+    const result = await db.query(
       'DELETE FROM inventory WHERE inventory_id = $1 RETURNING *',
       [id]
     );
@@ -259,6 +266,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   // Update stock (atomic operation)
   app.patch('/:id/stock', async (request, reply) => {
+    const db = getPool();
     const { id } = request.params as { id: string };
     const { quantity, operation } = request.body as { quantity: number; operation: 'add' | 'remove' | 'set' };
 
@@ -281,7 +289,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const result = await app.db.query(query, values);
+    const result = await db.query(query, values);
 
     return reply.send({
       success: true,

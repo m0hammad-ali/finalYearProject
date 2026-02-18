@@ -1,13 +1,14 @@
 /**
  * Recommendations Routes
  * AI-powered laptop recommendations
- * 
+ *
  * This route integrates with the ai-compute service for ML processing.
  * The API gateway handles I/O and orchestration while ai-compute handles
  * the heavy computation (Min-Max normalization, similarity scoring, etc.)
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { getPool } from '../db';
 import { z } from 'zod';
 
 const recommendationSchema = z.object({
@@ -31,6 +32,7 @@ const AI_COMPUTE_URL = process.env.AI_COMPUTE_URL || 'http://ai-compute:8000';
 export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
   // Get personalized recommendations
   app.post('/', async (request, reply) => {
+    const db = getPool();
     const body = recommendationSchema.parse(request.body);
     const userId = 'user-uuid-from-jwt'; // Placeholder - extract from JWT
 
@@ -53,9 +55,9 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
       // Enrich recommendations with laptop details from database
       const enrichedRecommendations = await Promise.all(
         aiData.recommendations.map(async (rec: any) => {
-          const laptopResult = await app.db.query(
+          const laptopResult = await db.query(
             `
-            SELECT 
+            SELECT
               lm.model_id,
               lm.model_name,
               lm.series,
@@ -75,7 +77,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
             JOIN hardware_specs hs ON lm.spec_id = hs.spec_id
             LEFT JOIN inventory i ON lm.model_id = i.model_id AND i.is_available = true
             WHERE lm.model_id = $1
-            GROUP BY lm.model_id, b.brand_name, hs.processor_model, hs.ram_gb, 
+            GROUP BY lm.model_id, b.brand_name, hs.processor_model, hs.ram_gb,
                      hs.storage_capacity_gb, hs.gpu_model, hs.display_size_inches
           `,
             [rec.spec_id]
@@ -91,9 +93,9 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
       // Store recommendation in database for analytics
       await Promise.all(
         enrichedRecommendations.map((rec: any) =>
-          app.db.query(
+          db.query(
             `INSERT INTO recommendations (
-              user_id, model_id, relevance_score, confidence_score, 
+              user_id, model_id, relevance_score, confidence_score,
               recommendation_reason, matched_features
             ) VALUES ($1, $2, $3, $4, $5, $6)`,
             [
@@ -104,7 +106,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
               generateRecommendationReason(rec, body.user_preferences),
               JSON.stringify(rec.matched_features || []),
             ]
-          ).catch(() => {}) // Ignore errors for analytics
+          ).catch(() => app.log.warn('Failed to store recommendation')) // Log errors for analytics
         )
       );
 
@@ -118,10 +120,10 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
       });
     } catch (error: any) {
       app.log.error('Recommendation error:', error);
-      
+
       // Fallback to database-based recommendations
       const fallbackRecs = await getFallbackRecommendations(app, body);
-      
+
       return reply.send({
         success: true,
         data: {
@@ -136,7 +138,8 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 
   // Get trending laptops
   app.get('/trending', async (request, reply) => {
-    const result = await app.db.query(
+    const db = getPool();
+    const result = await db.query(
       `
       SELECT 
         lm.model_id,
@@ -169,6 +172,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 
   // Get recommendations by usage type
   app.get('/by-usage/:usage', async (request, reply) => {
+    const db = getPool();
     const { usage } = request.params as { usage: string };
     const limit = parseInt((request.query as any).limit) || 10;
 
@@ -236,7 +240,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 
     values.push(limit);
 
-    const result = await app.db.query(query, values);
+    const result = await db.query(query, values);
 
     return reply.send({
       success: true,
@@ -247,6 +251,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 
   // Compare laptops
   app.post('/compare', async (request, reply) => {
+    const db = getPool();
     const { model_ids } = request.body as { model_ids: string[] };
 
     if (!model_ids || model_ids.length === 0 || model_ids.length > 4) {
@@ -258,7 +263,7 @@ export const recommendationsRoutes: FastifyPluginAsync = async (app) => {
 
     const placeholders = model_ids.map((_, i) => `$${i + 1}`).join(',');
 
-    const result = await app.db.query(
+    const result = await db.query(
       `
       SELECT 
         lm.model_id,
@@ -369,7 +374,7 @@ async function getFallbackRecommendations(
 
   values.push(body.top_k);
 
-  const result = await app.db.query(query, values);
+  const result = await db.query(query, values);
 
   return result.rows.map((row: any) => ({
     spec_id: row.spec_id,

@@ -4,6 +4,7 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { getPool } from '../db';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -23,10 +24,11 @@ const loginSchema = z.object({
 export const usersRoutes: FastifyPluginAsync = async (app) => {
   // Register new user
   app.post('/register', async (request, reply) => {
+    const db = getPool();
     const body = registerSchema.parse(request.body);
 
     // Check if email already exists
-    const existingUser = await app.db.query(
+    const existingUser = await db.query(
       'SELECT user_id FROM users WHERE email = $1',
       [body.email]
     );
@@ -41,7 +43,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
     // Hash password (in production, use bcrypt)
     const passwordHash = body.password; // Placeholder - use bcrypt in production
 
-    const result = await app.db.query(
+    const result = await db.query(
       `INSERT INTO users (email, password_hash, first_name, last_name, phone_number, user_type)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING user_id, email, first_name, last_name, user_type, created_at`,
@@ -50,7 +52,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
 
     // Create vendor record if user_type is vendor
     if (body.user_type === 'vendor') {
-      await app.db.query(
+      await db.query(
         `INSERT INTO vendors (user_id, shop_name, is_active)
          VALUES ($1, $2, false)`,
         [result.rows[0].user_id, 'Pending Setup']
@@ -66,9 +68,10 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
 
   // Login
   app.post('/login', async (request, reply) => {
+    const db = getPool();
     const body = loginSchema.parse(request.body);
 
-    const result = await app.db.query(
+    const result = await db.query(
       'SELECT * FROM users WHERE email = $1 AND is_active = true',
       [body.email]
     );
@@ -91,7 +94,7 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Update last login
-    await app.db.query(
+    await db.query(
       'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE user_id = $1',
       [user.user_id]
     );
@@ -116,10 +119,11 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
 
   // Get current user profile (protected route)
   app.get('/me', async (request, reply) => {
+    const db = getPool();
     // In production, extract user_id from JWT token
     const userId = 'user-uuid-from-jwt'; // Placeholder
 
-    const result = await app.db.query(
+    const result = await db.query(
       `SELECT user_id, email, first_name, last_name, phone_number, user_type, 
               is_verified, created_at, last_login_at
        FROM users
@@ -142,10 +146,11 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
 
   // Update user profile
   app.put('/me', async (request, reply) => {
+    const db = getPool();
     const userId = 'user-uuid-from-jwt'; // Placeholder
     const { first_name, last_name, phone_number } = request.body as Record<string, string>;
 
-    const result = await app.db.query(
+    const result = await db.query(
       `UPDATE users 
        SET first_name = COALESCE($1, first_name),
            last_name = COALESCE($2, last_name),
@@ -164,9 +169,10 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
 
   // Get user preferences
   app.get('/me/preferences', async (request, reply) => {
+    const db = getPool();
     const userId = 'user-uuid-from-jwt'; // Placeholder
 
-    const result = await app.db.query(
+    const result = await db.query(
       'SELECT * FROM user_preferences WHERE user_id = $1',
       [userId]
     );
@@ -179,25 +185,26 @@ export const usersRoutes: FastifyPluginAsync = async (app) => {
 
   // Update user preferences
   app.put('/me/preferences', async (request, reply) => {
+    const db = getPool();
     const userId = 'user-uuid-from-jwt'; // Placeholder
     const prefs = request.body as Record<string, any>;
 
     // Check if preferences exist
-    const existing = await app.db.query(
+    const existing = await db.query(
       'SELECT preference_id FROM user_preferences WHERE user_id = $1',
       [userId]
     );
 
     let result;
     if (existing.rowCount === 0) {
-      result = await app.db.query(
+      result = await db.query(
         `INSERT INTO user_preferences (user_id, min_budget, max_budget, primary_usage, min_ram_gb, min_storage_gb)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
         [userId, prefs.min_budget, prefs.max_budget, prefs.primary_usage, prefs.min_ram_gb, prefs.min_storage_gb]
       );
     } else {
-      result = await app.db.query(
+      result = await db.query(
         `UPDATE user_preferences 
          SET min_budget = COALESCE($1, min_budget),
              max_budget = COALESCE($2, max_budget),

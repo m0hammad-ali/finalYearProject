@@ -5,6 +5,7 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { getPool } from '../db';
 
 const brandSchema = z.object({
   brand_name: z.string().min(1).max(100),
@@ -16,13 +17,14 @@ const brandSchema = z.object({
 
 export const brandsRoutes: FastifyPluginAsync = async (app) => {
   // Get all brands
-  app.get('/', async (request, reply) => {
-    const result = await app.db.query(`
-      SELECT * FROM brands 
-      WHERE is_active = true 
+  app.get('/', async (_request, reply) => {
+    const db = getPool();
+    const result = await db.query(`
+      SELECT * FROM brands
+      WHERE is_active = true
       ORDER BY brand_name
     `);
-    
+
     return reply.send({
       success: true,
       data: result.rows,
@@ -33,19 +35,20 @@ export const brandsRoutes: FastifyPluginAsync = async (app) => {
   // Get brand by ID
   app.get('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    
-    const result = await app.db.query(
+    const db = getPool();
+
+    const result = await db.query(
       'SELECT * FROM brands WHERE brand_id = $1',
       [id]
     );
-    
+
     if (result.rowCount === 0) {
       return reply.code(404).send({
         error: 'Not Found',
         message: 'Brand not found',
       });
     }
-    
+
     return reply.send({
       success: true,
       data: result.rows[0],
@@ -55,14 +58,15 @@ export const brandsRoutes: FastifyPluginAsync = async (app) => {
   // Create brand
   app.post('/', async (request, reply) => {
     const body = brandSchema.parse(request.body);
-    
-    const result = await app.db.query(
+    const db = getPool();
+
+    const result = await db.query(
       `INSERT INTO brands (brand_name, brand_slug, country_of_origin, official_website)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [body.brand_name, body.brand_slug, body.country_of_origin, body.official_website]
     );
-    
+
     return reply.code(201).send({
       success: true,
       data: result.rows[0],
@@ -73,11 +77,12 @@ export const brandsRoutes: FastifyPluginAsync = async (app) => {
   app.put('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = brandSchema.partial().parse(request.body);
-    
+    const db = getPool();
+
     const fields: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
-    
+
     for (const [key, value] of Object.entries(body)) {
       if (value !== undefined) {
         fields.push(`${key} = $${paramIndex}`);
@@ -85,23 +90,23 @@ export const brandsRoutes: FastifyPluginAsync = async (app) => {
         paramIndex++;
       }
     }
-    
+
     if (fields.length === 0) {
       return reply.code(400).send({
         error: 'Bad Request',
         message: 'No fields to update',
       });
     }
-    
+
     values.push(id);
-    
-    const result = await app.db.query(
+
+    const result = await db.query(
       `UPDATE brands SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP
        WHERE brand_id = $${paramIndex}
        RETURNING *`,
       values
     );
-    
+
     return reply.send({
       success: true,
       data: result.rows[0],
@@ -111,19 +116,20 @@ export const brandsRoutes: FastifyPluginAsync = async (app) => {
   // Delete brand
   app.delete('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    
-    const result = await app.db.query(
+    const db = getPool();
+
+    const result = await db.query(
       'DELETE FROM brands WHERE brand_id = $1 RETURNING *',
       [id]
     );
-    
+
     if (result.rowCount === 0) {
       return reply.code(404).send({
         error: 'Not Found',
         message: 'Brand not found',
       });
     }
-    
+
     return reply.send({
       success: true,
       message: 'Brand deleted successfully',

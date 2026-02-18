@@ -4,10 +4,12 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { getPool } from '../db';
 
 export const laptopsRoutes: FastifyPluginAsync = async (app) => {
   // Get all laptops with filters
   app.get('/', async (request, reply) => {
+    const db = getPool();
     const {
       brand,
       minRam,
@@ -15,8 +17,6 @@ export const laptopsRoutes: FastifyPluginAsync = async (app) => {
       minStorage,
       maxStorage,
       gpuType,
-      minPrice,
-      maxPrice,
       series,
       limit = '50',
       offset = '0',
@@ -71,7 +71,7 @@ export const laptopsRoutes: FastifyPluginAsync = async (app) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const query = `
-      SELECT 
+      SELECT
         lm.model_id,
         lm.model_name,
         lm.model_number,
@@ -110,7 +110,7 @@ export const laptopsRoutes: FastifyPluginAsync = async (app) => {
 
     values.push(parseInt(limit, 10), parseInt(offset, 10));
 
-    const result = await app.db.query(query, values);
+    const result = await db.query(query, values);
 
     return reply.send({
       success: true,
@@ -125,9 +125,10 @@ export const laptopsRoutes: FastifyPluginAsync = async (app) => {
 
   // Get laptop by ID
   app.get('/:id', async (request, reply) => {
+    const db = getPool();
     const { id } = request.params as { id: string };
 
-    const result = await app.db.query(
+    const result = await db.query(
       `
       SELECT 
         lm.*,
@@ -152,7 +153,7 @@ export const laptopsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Get inventory for this laptop
-    const inventoryResult = await app.db.query(
+    const inventoryResult = await db.query(
       `
       SELECT 
         i.*,
@@ -178,9 +179,10 @@ export const laptopsRoutes: FastifyPluginAsync = async (app) => {
 
   // Search laptops
   app.get('/search/:query', async (request, reply) => {
+    const db = getPool();
     const { query } = request.params as { query: string };
 
-    const result = await app.db.query(
+    const result = await db.query(
       `
       SELECT 
         lm.model_id,

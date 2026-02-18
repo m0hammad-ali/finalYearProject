@@ -7,8 +7,8 @@ FROM node:20-alpine AS development
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci
+COPY package.json ./
+RUN npm install
 
 # Copy source
 COPY . .
@@ -18,7 +18,7 @@ EXPOSE 5173
 
 # Enable polling for WSL2 file watching
 ENV CHOKIDAR_USEPOLLING=true
-VITE_API_GATEWAY_URL=http://localhost:3000
+ENV VITE_API_GATEWAY_URL=http://localhost:3000
 
 # Run dev server
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
@@ -27,8 +27,8 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci
+COPY package.json ./
+RUN npm install
 
 COPY . .
 

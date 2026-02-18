@@ -67,17 +67,25 @@ async def normalize_specs(request: NormalizationRequest):
     try:
         # Load hardware specs from database or sample data
         df = load_hardware_specs()
-        
+
         if df.empty:
             raise HTTPException(status_code=404, detail="No hardware specs found")
-        
+
         # Initialize normalizer
         normalizer = MinMaxNormalizer()
-        
-        # Select features to normalize
+
+        # Select features to normalize - only numeric columns
         features = request.features if request.features else None
-        normalized_df, scaling_params = normalizer.fit_transform(df, features)
+        if features is None:
+            # Use predefined numeric feature columns
+            from preprocessing.data_loader import get_feature_columns
+            features = get_feature_columns()
         
+        # Filter to only columns that exist in dataframe
+        available_features = [f for f in features if f in df.columns]
+        
+        normalized_df, scaling_params = normalizer.fit_transform(df, available_features)
+
         return {
             "success": True,
             "normalized_data": normalized_df.to_dict(orient="records"),

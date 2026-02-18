@@ -41,86 +41,97 @@ class MinMaxNormalizer:
     def fit(self, df: pd.DataFrame, features: Optional[List[str]] = None) -> 'MinMaxNormalizer':
         """
         Compute the min and max values for each feature.
-        
+
         Args:
             df: Input DataFrame with hardware specifications
             features: Optional list of feature names to normalize.
                      If None, all numeric columns are used.
-        
+
         Returns:
             self: Fitted normalizer instance
-        
+
         Raises:
             ValueError: If DataFrame is empty or contains non-numeric data
         """
         if df.empty:
             raise ValueError("Cannot fit on empty DataFrame")
-        
+
         # Select numeric columns if features not specified
         if features is None:
             features = df.select_dtypes(include=[np.number]).columns.tolist()
-        
+
         # Validate features exist
         missing_features = set(features) - set(df.columns)
         if missing_features:
             raise ValueError(f"Missing features: {missing_features}")
-        
+
         # Compute min and max for each feature
         for feature in features:
+            if feature not in df.columns:
+                continue
+            
+            # Skip non-numeric columns
+            if not pd.api.types.is_numeric_dtype(df[feature]):
+                continue
+                
             col_data = df[feature].dropna()
             if len(col_data) == 0:
                 continue
-            
+
             self.min_values[feature] = float(col_data.min())
             self.max_values[feature] = float(col_data.max())
-        
+
         self._is_fitted = True
         return self
     
     def transform(self, df: pd.DataFrame, features: Optional[List[str]] = None) -> pd.DataFrame:
         """
         Scale the data to the specified range.
-        
+
         Args:
             df: Input DataFrame to transform
             features: Optional list of feature names to transform
-        
+
         Returns:
             pd.DataFrame: Transformed DataFrame with normalized values
-        
+
         Raises:
             NotFittedError: If normalizer hasn't been fitted yet
         """
         if not self._is_fitted:
             raise NotFittedError("Normalizer must be fitted before transform")
-        
+
         # Create a copy to avoid modifying original data
-        df_normalized = df.copy().astype(float)
-        
+        df_normalized = df.copy()
+
         if features is None:
             features = list(self.min_values.keys())
-        
+
         min_range, max_range = self.feature_range
-        
+
         for feature in features:
             if feature not in df_normalized.columns:
                 continue
-            
+
             if feature not in self.min_values or feature not in self.max_values:
                 continue
-            
+
+            # Skip non-numeric columns
+            if not pd.api.types.is_numeric_dtype(df_normalized[feature]):
+                continue
+
             min_val = self.min_values[feature]
             max_val = self.max_values[feature]
-            
+
             # Handle constant features (max == min)
             if max_val == min_val:
                 df_normalized[feature] = (min_range + max_range) / 2
             else:
                 # Apply Min-Max normalization formula
                 df_normalized[feature] = (
-                    (df_normalized[feature] - min_val) / (max_val - min_val)
+                    (df_normalized[feature].astype(float) - min_val) / (max_val - min_val)
                 ) * (max_range - min_range) + min_range
-        
+
         return df_normalized
     
     def fit_transform(

@@ -1,0 +1,27 @@
+# AI Compute Service Dependencies
+# Gulhaji Plaza Laptop Recommendation System
+
+# FastAPI framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+
+# Data processing
+pandas==2.1.4
+numpy==1.26.3
+
+# Database connectivity
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
+
+# ML libraries (for future expansion)
+scikit-learn==1.4.0
+
+# Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# HTTP client
+httpx==0.26.0
+
+# CORS support
+python-multipart==0.0.6

@@ -320,37 +320,39 @@ CREATE INDEX idx_recommendations_session ON recommendations(session_id);
 -- TABLE: user_preferences
 -- Description: User preferences for AI recommendation engine
 -- 3NF Compliance: Preference attributes depend solely on preference_id
+-- Note: preferred_brands stored as text array (UUIDs) since PostgreSQL
+--       doesn't support array foreign keys directly
 -- ============================================================================
 CREATE TABLE user_preferences (
     preference_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE ON UPDATE CASCADE,
-    
+
     -- Budget preferences
     min_budget DECIMAL(10,2),
     max_budget DECIMAL(10,2),
-    
+
     -- Usage patterns
     primary_usage VARCHAR(50), -- Gaming, Programming, Design, Office, etc.
     secondary_usages VARCHAR(50)[],
-    
-    -- Hardware preferences
-    preferred_brands UUID[] REFERENCES brands(brand_id),
+
+    -- Hardware preferences (stored as text array for UUIDs)
+    preferred_brands TEXT[], -- Array of brand UUIDs as text
     min_ram_gb INTEGER,
     min_storage_gb INTEGER,
     preferred_gpu_type VARCHAR(50),
     min_display_size DECIMAL(3,1),
-    
+
     -- Portability preferences
     max_weight_kg DECIMAL(4,2),
     prefer_thin_and_light BOOLEAN DEFAULT FALSE,
-    
+
     -- Other preferences
     must_have_features TEXT[],
     deal_breakers TEXT[],
-    
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
+
     -- 3NF: All attributes depend on preference_id
     CONSTRAINT chk_budget_range CHECK (min_budget IS NULL OR max_budget IS NULL OR min_budget <= max_budget),
     CONSTRAINT chk_primary_usage CHECK (primary_usage IN ('Gaming', 'Programming', 'Design', 'Video Editing', 'Office', 'Student', 'General', 'Workstation'))

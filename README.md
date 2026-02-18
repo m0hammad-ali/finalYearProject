@@ -84,6 +84,21 @@ finalYearProject/
 - Node.js 18+ (for local development)
 - Python 3.11+ (for local development)
 
+### Environment Setup
+
+1. **Copy the environment file**:
+```bash
+cp .env.example .env
+```
+
+2. **Update the `.env` file** with your desired values:
+```bash
+# IMPORTANT: Change these in production!
+POSTGRES_USER=gulhaji_admin
+POSTGRES_PASSWORD=your_secure_password_here
+POSTGRES_DB=gulhaji_marketplace
+```
+
 ### Running with Docker Compose
 
 ```bash

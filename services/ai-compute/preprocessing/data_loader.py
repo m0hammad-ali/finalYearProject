@@ -19,35 +19,38 @@ def load_hardware_specs(
 ) -> pd.DataFrame:
     """
     Load hardware specifications from PostgreSQL database.
-    
+
     Args:
-        connection_string: PostgreSQL connection URL. 
+        connection_string: PostgreSQL connection URL.
                           Falls back to DATABASE_URL env var.
         spec_ids: Optional list of spec IDs to filter
-    
+
     Returns:
         pd.DataFrame: Hardware specifications data
-    
+
     Note:
         If database connection fails, returns sample data for development.
     """
     # Try to load from database
     try:
         import psycopg2
-        from sqlalchemy import create_engine
-        
+        from sqlalchemy import create_engine, text
+
         conn_string = connection_string or os.getenv("DATABASE_URL")
-        
+
         if conn_string:
             engine = create_engine(conn_string)
-            
+
             query = "SELECT * FROM hardware_specs"
             if spec_ids:
-                placeholders = ','.join(['%s'] * len(spec_ids))
+                # Use parameterized query to prevent SQL injection
+                placeholders = ','.join([f':param{i}' for i in range(len(spec_ids))])
                 query += f" WHERE spec_id IN ({placeholders})"
-            
-            df = pd.read_sql_query(query, engine, params=spec_ids)
-            
+                params = {f'param{i}': sid for i, sid in enumerate(spec_ids)}
+                df = pd.read_sql_query(text(query), engine, params=params)
+            else:
+                df = pd.read_sql_query(query, engine)
+
             if not df.empty:
                 return preprocess_hardware_specs(df)
     
@@ -235,7 +238,8 @@ def preprocess_hardware_specs(df: pd.DataFrame) -> pd.DataFrame:
 def get_feature_columns() -> List[str]:
     """
     Get list of numeric feature columns for normalization.
-    
+    Excludes non-numeric columns like timestamps, IDs, and text fields.
+
     Returns:
         List[str]: Column names suitable for ML processing
     """
@@ -245,33 +249,46 @@ def get_feature_columns() -> List[str]:
         "processor_threads",
         "processor_base_clock_ghz",
         "processor_boost_clock_ghz",
-        
+
         # Memory
         "ram_gb",
         "max_ram_gb",
-        
+
         # Storage
         "storage_capacity_gb",
         "additional_storage_slots",
-        
+
         # Display
         "display_size_inches",
         "refresh_rate_hz",
-        
+
         # Derived scores
         "gpu_score",
         "display_quality_score",
         "portability_score",
         "battery_score",
         "connectivity_score",
-        
+
         # Physical
         "weight_kg",
         "thickness_mm",
         "battery_whr",
-        
+
         # Connectivity
         "usb_c_ports",
         "usb_a_ports",
         "hdmi_ports"
     ]
+
+
+def get_numeric_columns() -> List[str]:
+    """
+    Get all numeric columns from hardware_specs table for normalization.
+    Excludes timestamps, IDs, and text columns.
+
+    Returns:
+        List[str]: Numeric column names
+    """
+    base_features = get_feature_columns()
+    # Add spec_id for reference but it won't be normalized
+    return base_features

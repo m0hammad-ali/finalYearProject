@@ -1,0 +1,142 @@
+version: '3.8'
+
+# WSL2 Optimized Docker Compose for "AI Powered Laptop Recommendation and Marketplace for Gulhaji Plaza"
+# Optimizations:
+# - Uses host networking where applicable for WSL2 compatibility
+# - Volume mounts use absolute paths compatible with WSL2
+# - Resource limits configured for development environment
+# - Health checks for service dependency management
+
+services:
+  # PostgreSQL 15 Database - ACID-compliant storage
+  postgres:
+    image: postgres:15
+    container_name: gulhaji_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gulhaji_admin
+      POSTGRES_PASSWORD: secure_password_123
+      POSTGRES_DB: gulhaji_marketplace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gulhaji_admin -d gulhaji_marketplace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gulhaji_network
+    # WSL2: Ensure proper file system performance
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # API Gateway - Node.js service for I/O handling
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: gulhaji_api_gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://gulhaji_admin:secure_password_123@postgres:5432/gulhaji_marketplace
+      AI_COMPUTE_URL: http://ai-compute:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./services/api-gateway:/app:cached
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - gulhaji_network
+    # WSL2: Cached volumes for better I/O performance
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # AI Compute Service - Python/FastAPI for ML workloads
+  ai-compute:
+    build:
+      context: ./services/ai-compute
+      dockerfile: Dockerfile
+    container_name: gulhaji_ai_compute
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: 1
+      PORT: 8000
+      DATABASE_URL: postgresql://gulhaji_admin:secure_password_123@postgres:5432/gulhaji_marketplace
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./services/ai-compute:/app:cached
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - gulhaji_network
+    # WSL2: Optimized for compute-heavy AI logic
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # Frontend - React SPA with Vite
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: gulhaji_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      VITE_API_GATEWAY_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./services/frontend:/app:cached
+      - /app/node_modules
+      - /app/dist
+    depends_on:
+      - api-gateway
+    networks:
+      - gulhaji_network
+    # WSL2: Vite HMR optimized with cached volumes
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    # WSL2: Enable polling for file watch in WSL environment
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+networks:
+  gulhaji_network:
+    driver: bridge
+    # WSL2: Optimize network for localhost access
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  postgres_data:
+    # WSL2: Named volume for better performance than bind mounts
+    name: gulhaji_postgres_data

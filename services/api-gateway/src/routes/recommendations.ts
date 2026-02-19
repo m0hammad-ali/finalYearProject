@@ -327,6 +327,7 @@ async function getFallbackRecommendations(
   app: any,
   body: any
 ): Promise<any[]> {
+  const db = getPool(); // Get database pool
   const prefs = body.user_preferences;
   const conditions: string[] = ['lm.is_discontinued = false', 'i.is_available = true', 'i.stock_quantity > 0'];
   const values: any[] = [];

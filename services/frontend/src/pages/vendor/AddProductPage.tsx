@@ -5,17 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { api } from '@/lib/utils';
 
 /**
  * Add Product Page - Vendor Portal
- * 
+ *
  * Form to add new laptop to inventory.
  * HCI: Clear form layout, validation feedback, progress indication.
  */
 export function AddProductPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     // Product Info
     brand: '',
@@ -32,12 +33,34 @@ export function AddProductPage() {
     stock: '',
     warranty: '',
   });
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, would submit to API
-    console.log('Submitting:', formData);
-    navigate('/vendor/inventory');
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Map form data to API format
+      const inventoryData = {
+        model_id: formData.model, // In production, this would be a proper model_id from DB
+        unit_price: parseFloat(formData.price),
+        stock_quantity: parseInt(formData.stock, 10),
+        condition_type: 'New' as const,
+        warranty_months: formData.warranty ? parseInt(formData.warranty, 10) : 12,
+      };
+
+      // Call API to create inventory
+      await api.createInventory(inventoryData);
+      
+      // Navigate to inventory page on success
+      navigate('/vendor/inventory');
+    } catch (err: any) {
+      setError(err.message || 'Failed to add product. Please try again.');
+      console.error('Error adding product:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,6 +107,14 @@ export function AddProductPage() {
           </div>
         ))}
       </div>
+
+      {error && (
+        <Card className="border-destructive">
+          <CardContent className="pt-6 text-center text-destructive">
+            {error}
+          </CardContent>
+        </Card>
+      )}
 
       <form onSubmit={handleSubmit}>
         <Card>
@@ -252,17 +283,26 @@ export function AddProductPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setStep(Math.max(1, step - 1))}
-                disabled={step === 1}
+                disabled={step === 1 || loading}
               >
                 Previous
               </Button>
               {step < 3 ? (
-                <Button type="button" variant="gold" onClick={() => setStep(Math.min(3, step + 1))}>
+                <Button 
+                  type="button" 
+                  variant="gold" 
+                  onClick={() => setStep(Math.min(3, step + 1))}
+                  disabled={loading}
+                >
                   Next
                 </Button>
               ) : (
-                <Button type="submit" variant="gold">
-                  Add to Inventory
+                <Button 
+                  type="submit" 
+                  variant="gold"
+                  disabled={loading}
+                >
+                  {loading ? 'Adding...' : 'Add to Inventory'}
                 </Button>
               )}
             </div>

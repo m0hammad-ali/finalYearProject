@@ -1,28 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Sparkles, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { api, formatPrice } from '@/lib/utils';
+
+interface Recommendation {
+  spec_id: string;
+  relevance_score: number;
+  laptop?: {
+    model_id: string;
+    model_name: string;
+    brand_name: string;
+    series?: string;
+    processor_model?: string;
+    ram_gb?: number;
+    storage_capacity_gb?: number;
+    gpu_type?: string;
+    min_price?: number;
+  };
+  reasons?: string[];
+}
 
 /**
  * AI Recommendations Page - Customer Portal
- * 
+ *
  * Interactive form for AI-powered laptop recommendations.
  * HCI: Progressive form, clear feedback, minimal cognitive load.
  */
 export function RecommendationsPage() {
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [preferences, setPreferences] = useState({
     budget: { min: '', max: '' },
-    usage: '',
+    usage: searchParams.get('usage') || '',
     ram: '',
     storage: '',
     gpu: '',
     portability: '',
   });
-  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+
+  // Pre-fill usage from URL parameter
+  useEffect(() => {
+    const usage = searchParams.get('usage');
+    if (usage) {
+      setPreferences(prev => ({ ...prev, usage }));
+    }
+  }, [searchParams]);
 
   const usageOptions = [
     { value: 'gaming', label: 'Gaming', description: 'High-performance GPU, high refresh rate' },
@@ -32,28 +61,59 @@ export function RecommendationsPage() {
     { value: 'student', label: 'Student', description: 'Budget-friendly, all-rounder' },
   ];
 
-  const handleGetRecommendations = () => {
-    // Mock recommendations - would call AI service in production
-    setRecommendations([
-      {
-        id: '1',
-        name: 'Lenovo Legion 5',
-        brand: 'Lenovo',
-        price: 189999,
-        matchScore: 95,
-        specs: { cpu: 'Ryzen 7', ram: 16, storage: 1024, gpu: 'RTX 4060' },
-        reasons: ['Great for gaming', 'Within budget', 'Excellent GPU'],
-      },
-      {
-        id: '2',
-        name: 'ASUS ROG Strix',
-        brand: 'ASUS',
-        price: 199999,
-        matchScore: 90,
-        specs: { cpu: 'i7-13700H', ram: 16, storage: 512, gpu: 'RTX 4050' },
-        reasons: ['Good performance', 'Trusted brand'],
-      },
-    ]);
+  const handleGetRecommendations = async () => {
+    try {
+      setLoading(true);
+      
+      // Map usage to API format
+      const usageMap: Record<string, string> = {
+        gaming: 'Gaming',
+        programming: 'Programming',
+        design: 'Design',
+        office: 'Office',
+        student: 'Student',
+      };
+
+      // Build preferences for API
+      const apiPreferences: any = {};
+      
+      if (preferences.budget.max) {
+        apiPreferences.max_budget = parseFloat(preferences.budget.max);
+      }
+      if (preferences.budget.min) {
+        apiPreferences.min_budget = parseFloat(preferences.budget.min);
+      }
+      if (preferences.usage) {
+        apiPreferences.primary_usage = usageMap[preferences.usage] || 'General';
+      }
+      if (preferences.ram) {
+        apiPreferences.min_ram_gb = parseInt(preferences.ram, 10);
+      }
+      if (preferences.gpu) {
+        apiPreferences.preferred_gpu_type = preferences.gpu as 'Integrated' | 'Dedicated';
+      }
+
+      // Call API for recommendations
+      const data = await api.getRecommendations(apiPreferences, 5);
+      setRecommendations(data.recommendations || []);
+    } catch (err) {
+      console.error('Error fetching recommendations:', err);
+      // Fallback to usage-based recommendations
+      if (preferences.usage) {
+        try {
+          const data = await api.getByUsage(preferences.usage, 5);
+          setRecommendations(data.map((item: any) => ({
+            spec_id: item.model_id,
+            relevance_score: 0.8,
+            laptop: item,
+          })));
+        } catch (fallbackErr) {
+          console.error('Fallback error:', fallbackErr);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -126,22 +186,44 @@ export function RecommendationsPage() {
             <div className="space-y-2">
               <Label>Minimum RAM</Label>
               <div className="flex flex-wrap gap-2">
-                {['8GB', '16GB', '32GB', '64GB'].map((ram) => (
+                {['8', '16', '32', '64'].map((ram) => (
                   <Badge
                     key={ram}
                     variant={preferences.ram === ram ? 'default' : 'outline'}
                     className="cursor-pointer"
                     onClick={() => setPreferences({ ...preferences, ram })}
                   >
-                    {ram}
+                    {ram}GB
                   </Badge>
                 ))}
               </div>
             </div>
 
-            <Button className="w-full" variant="gold" onClick={handleGetRecommendations}>
+            {/* GPU Type */}
+            <div className="space-y-2">
+              <Label>GPU Type</Label>
+              <div className="flex flex-wrap gap-2">
+                {['Integrated', 'Dedicated'].map((gpu) => (
+                  <Badge
+                    key={gpu}
+                    variant={preferences.gpu === gpu ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => setPreferences({ ...preferences, gpu })}
+                  >
+                    {gpu}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <Button 
+              className="w-full" 
+              variant="gold" 
+              onClick={handleGetRecommendations}
+              disabled={loading}
+            >
               <Sparkles className="mr-2 h-4 w-4" />
-              Get Recommendations
+              {loading ? 'Getting Recommendations...' : 'Get Recommendations'}
             </Button>
           </CardContent>
         </Card>
@@ -157,11 +239,24 @@ export function RecommendationsPage() {
             <CardDescription>
               {recommendations.length > 0
                 ? 'Based on your preferences'
-                : 'Fill in your preferences to get started'}
+                : 'Fill in your preferences and click "Get Recommendations"'}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {recommendations.length === 0 ? (
+            {loading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Card key={i} className="animate-pulse">
+                    <CardContent className="p-6">
+                      <div className="h-4 bg-muted rounded w-1/4 mb-4"></div>
+                      <div className="h-6 bg-muted rounded w-1/2 mb-2"></div>
+                      <div className="h-4 bg-muted rounded w-3/4 mb-4"></div>
+                      <div className="h-8 bg-muted rounded w-1/3"></div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : recommendations.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Enter your preferences and click "Get Recommendations"</p>
@@ -169,37 +264,31 @@ export function RecommendationsPage() {
             ) : (
               <div className="space-y-4">
                 {recommendations.map((rec, index) => (
-                  <Card key={rec.id}>
+                  <Card key={rec.spec_id || index}>
                     <CardContent className="p-6">
                       <div className="flex items-start justify-between">
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <Badge variant="gold">#{index + 1} Match</Badge>
-                            <Badge variant="secondary">{rec.brand}</Badge>
+                            <Badge variant="secondary">{rec.laptop?.brand_name || 'Unknown'}</Badge>
                           </div>
-                          <h3 className="text-xl font-bold">{rec.name}</h3>
+                          <h3 className="text-xl font-bold">{rec.laptop?.model_name || 'Unknown Model'}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {rec.specs.cpu} • {rec.specs.ram}GB RAM • {rec.specs.storage}GB • {rec.specs.gpu}
+                            {rec.laptop?.processor_model || 'N/A'} • {rec.laptop?.ram_gb || 'N/A'}GB RAM • {rec.laptop?.storage_capacity_gb || 'N/A'}GB • {rec.laptop?.gpu_type || 'N/A'}
                           </p>
-                          <div className="flex flex-wrap gap-2">
-                            {rec.reasons.map((reason: string) => (
-                              <Badge key={reason} variant="outline">
-                                <Check className="h-3 w-3 mr-1" />
-                                {reason}
-                              </Badge>
-                            ))}
-                          </div>
                         </div>
                         <div className="text-right">
                           <div className="text-3xl font-bold text-gulhaji-green">
-                            Rs. {rec.price.toLocaleString()}
+                            {rec.laptop?.min_price ? formatPrice(rec.laptop.min_price) : 'Contact Vendor'}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            Match: {rec.matchScore}%
+                            Match: {Math.round((rec.relevance_score || 0) * 100)}%
                           </div>
-                          <Button className="mt-2" variant="gold" size="sm">
-                            View Details
-                            <ChevronRight className="h-4 w-4 ml-1" />
+                          <Button className="mt-2" variant="gold" size="sm" asChild>
+                            <a href={`/product/${rec.laptop?.model_id || '#'}`}>
+                              View Details
+                              <ChevronRight className="h-4 w-4 ml-1" />
+                            </a>
                           </Button>
                         </div>
                       </div>
@@ -212,13 +301,5 @@ export function RecommendationsPage() {
         </Card>
       </div>
     </div>
-  );
-}
-
-function Check({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
   );
 }

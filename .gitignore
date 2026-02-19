@@ -56,3 +56,12 @@ coverage/
 
 # Project-specific (DO NOT COMMIT)
 SUMMARY_OF_WORK.md
+
+# Documentation & Test Files (generated)
+TEST_REPORT.md
+FIXES_APPLIED.md
+THREE_TIER_VERIFICATION.md
+IMPLEMENTATION_SUMMARY.md
+QUICK_START.md
+TESTING_AFTER_FIXES.md
+test-endpoints.sh

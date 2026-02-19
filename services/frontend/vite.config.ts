@@ -19,7 +19,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://gulhaji_api_gateway:3000', // Use Docker service name
         changeOrigin: true,
       },
     },

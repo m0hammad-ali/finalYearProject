@@ -1,42 +1,53 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Laptop, Search, TrendingUp, Shield, Truck, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { api, formatPrice } from '@/lib/utils';
+
+interface Laptop {
+  model_id: string;
+  model_name: string;
+  brand_name: string;
+  brand_slug: string;
+  min_price: number;
+  processor_model: string;
+  ram_gb: number;
+  storage_capacity_gb: number;
+  product_image_url?: string;
+  short_description?: string;
+}
 
 /**
  * Home Page - Customer Portal
- * 
+ *
  * Landing page for laptop discovery and recommendations.
  * HCI: Clear value proposition, prominent CTAs, trust indicators.
  */
 export function HomePage() {
-  const featuredLaptops = [
-    {
-      id: '1',
-      name: 'Dell XPS 15',
-      brand: 'Dell',
-      price: 249999,
-      image: '/laptop1.jpg',
-      specs: { cpu: 'i7-13700H', ram: '16GB', storage: '512GB SSD' },
-    },
-    {
-      id: '2',
-      name: 'MacBook Pro 14"',
-      brand: 'Apple',
-      price: 329999,
-      image: '/laptop2.jpg',
-      specs: { cpu: 'M3 Pro', ram: '18GB', storage: '512GB SSD' },
-    },
-    {
-      id: '3',
-      name: 'Lenovo Legion 5',
-      brand: 'Lenovo',
-      price: 189999,
-      image: '/laptop3.jpg',
-      specs: { cpu: 'Ryzen 7', ram: '16GB', storage: '1TB SSD' },
-    },
-  ];
+  const [featuredLaptops, setFeaturedLaptops] = useState<Laptop[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchFeaturedLaptops() {
+      try {
+        setLoading(true);
+        // Fetch trending laptops as featured
+        const data = await api.getTrending();
+        setFeaturedLaptops(data.slice(0, 3));
+        setError(null);
+      } catch (err) {
+        setError('Failed to load featured laptops. Please try again later.');
+        console.error('Error fetching featured laptops:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchFeaturedLaptops();
+  }, []);
 
   return (
     <div className="space-y-12">
@@ -119,33 +130,54 @@ export function HomePage() {
             <Link to="/browse">View All →</Link>
           </Button>
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {featuredLaptops.map((laptop) => (
-            <Card key={laptop.id} className="group cursor-pointer hover:shadow-lg transition-shadow">
-              <Link to={`/product/${laptop.id}`}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <Badge variant="secondary">{laptop.brand}</Badge>
-                  </div>
-                  <CardTitle className="mt-2">{laptop.name}</CardTitle>
-                  <CardDescription>
-                    {laptop.specs.cpu} • {laptop.specs.ram} • {laptop.specs.storage}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-gulhaji-green">
-                      Rs. {laptop.price.toLocaleString()}
-                    </span>
-                    <Button size="sm" variant="gold">
-                      View Details
-                    </Button>
-                  </div>
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="pt-6">
+                  <div className="h-4 bg-muted rounded w-16 mb-4"></div>
+                  <div className="h-6 bg-muted rounded w-3/4 mb-2"></div>
+                  <div className="h-4 bg-muted rounded w-1/2 mb-4"></div>
+                  <div className="h-8 bg-muted rounded w-1/3"></div>
                 </CardContent>
-              </Link>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        ) : error ? (
+          <Card>
+            <CardContent className="pt-6 text-center text-muted-foreground">
+              <p>{error}</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {featuredLaptops.map((laptop) => (
+              <Card key={laptop.model_id} className="group cursor-pointer hover:shadow-lg transition-shadow">
+                <Link to={`/product/${laptop.model_id}`}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <Badge variant="secondary">{laptop.brand_name}</Badge>
+                    </div>
+                    <CardTitle className="mt-2">{laptop.model_name}</CardTitle>
+                    <CardDescription>
+                      {laptop.processor_model} • {laptop.ram_gb}GB RAM • {laptop.storage_capacity_gb}GB
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl font-bold text-gulhaji-green">
+                        {formatPrice(laptop.min_price)}
+                      </span>
+                      <Button size="sm" variant="gold">
+                        View Details
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Link>
+              </Card>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Usage Categories */}
@@ -155,7 +187,7 @@ export function HomePage() {
           {['Gaming', 'Programming', 'Design', 'Office'].map((usage) => (
             <Link
               key={usage}
-              to={`/recommendations?usage=${usage.toLowerCase()}`}
+              to={`/recommendations?usage=${usage.toLowerCase().replace(' ', '-')}`}
               className="flex items-center justify-center p-6 rounded-lg border bg-card hover:bg-accent transition-colors"
             >
               <span className="font-semibold">{usage}</span>

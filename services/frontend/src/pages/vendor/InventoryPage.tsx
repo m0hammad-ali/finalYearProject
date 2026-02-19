@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { Edit, Trash2, Plus, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect } from "react";
+import { Edit, Trash2, Plus, Search } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -12,76 +12,74 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
+import { api, formatPrice } from "@/lib/utils";
+
+interface InventoryItem {
+  inventory_id: string;
+  model_name: string;
+  brand_name: string;
+  unit_price: number;
+  stock_quantity: number;
+  condition_type: string;
+  is_available: boolean;
+  listed_at: string;
+}
 
 /**
  * Inventory Management Page - Vendor Portal
- * 
+ *
  * View and manage all inventory items.
  * HCI: Clear table layout, prominent actions, search functionality.
  */
 export function InventoryPage() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const inventory = [
-    {
-      id: '1',
-      product: 'Dell XPS 15',
-      brand: 'Dell',
-      price: 249999,
-      stock: 5,
-      minStock: 2,
-      status: 'In Stock',
-      lastUpdated: '2024-02-15',
-    },
-    {
-      id: '2',
-      product: 'MacBook Air M2',
-      brand: 'Apple',
-      price: 189999,
-      stock: 1,
-      minStock: 2,
-      status: 'Low Stock',
-      lastUpdated: '2024-02-14',
-    },
-    {
-      id: '3',
-      product: 'HP Pavilion Gaming',
-      brand: 'HP',
-      price: 159999,
-      stock: 8,
-      minStock: 3,
-      status: 'In Stock',
-      lastUpdated: '2024-02-13',
-    },
-    {
-      id: '4',
-      product: 'Lenovo Legion 5',
-      brand: 'Lenovo',
-      price: 189999,
-      stock: 0,
-      minStock: 2,
-      status: 'Out of Stock',
-      lastUpdated: '2024-02-12',
-    },
-  ];
+  useEffect(() => {
+    async function fetchInventory() {
+      try {
+        setLoading(true);
+        // Fetch all inventory (in production, filter by authenticated vendor)
+        const data = await api.getInventory({});
+        setInventory(data);
+      } catch (err) {
+        console.error("Error fetching inventory:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchInventory();
+  }, []);
 
   const filteredInventory = inventory.filter(
     (item) =>
-      item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.brand.toLowerCase().includes(searchTerm.toLowerCase())
+      item.model_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.brand_name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'In Stock':
-        return 'success';
-      case 'Low Stock':
-        return 'warning';
-      case 'Out of Stock':
-        return 'destructive';
-      default:
-        return 'default';
+  const getStatusVariant = (stock: number) => {
+    if (stock === 0) return "destructive";
+    if (stock <= 2) return "warning";
+    return "success";
+  };
+
+  const getStatusLabel = (stock: number) => {
+    if (stock === 0) return "Out of Stock";
+    if (stock <= 2) return "Low Stock";
+    return "In Stock";
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this item?")) return;
+    try {
+      await api.deleteInventory(id);
+      setInventory(inventory.filter((item) => item.inventory_id !== id));
+    } catch (err) {
+      console.error("Error deleting inventory:", err);
+      alert("Failed to delete item");
     }
   };
 
@@ -94,12 +92,12 @@ export function InventoryPage() {
             Manage your product listings and stock levels
           </p>
         </div>
-        <Button variant="gold" asChild>
+        {/* <Button variant="gold" asChild>
           <Link to="/vendor/add-product">
             <Plus className="mr-2 h-4 w-4" />
             Add Product
           </Link>
-        </Button>
+        </Button> */}
       </div>
 
       <Card>
@@ -118,56 +116,87 @@ export function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Updated</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInventory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.product}</TableCell>
-                  <TableCell>{item.brand}</TableCell>
-                  <TableCell>Rs. {item.price.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span>{item.stock}</span>
-                      {item.stock <= item.minStock && item.stock > 0 && (
-                        <Badge variant="warning" className="text-xs">
-                          Low
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusVariant(item.status)}>
-                      {item.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {item.lastUpdated}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+          {loading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex gap-4 animate-pulse">
+                  <div className="h-10 bg-muted rounded flex-1"></div>
+                  <div className="h-10 bg-muted rounded w-24"></div>
+                  <div className="h-10 bg-muted rounded w-24"></div>
+                  <div className="h-10 bg-muted rounded w-24"></div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Listed</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredInventory.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="text-center text-muted-foreground py-8"
+                    >
+                      {loading ? "Loading..." : "No products found"}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredInventory.map((item) => (
+                    <TableRow key={item.inventory_id}>
+                      <TableCell className="font-medium">
+                        {item.model_name}
+                      </TableCell>
+                      <TableCell>{item.brand_name}</TableCell>
+                      <TableCell>{formatPrice(item.unit_price)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span>{item.stock_quantity}</span>
+                          {item.stock_quantity <= 2 &&
+                            item.stock_quantity > 0 && (
+                              <Badge variant="warning" className="text-xs">
+                                Low
+                              </Badge>
+                            )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(item.stock_quantity)}>
+                          {getStatusLabel(item.stock_quantity)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(item.listed_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDelete(item.inventory_id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

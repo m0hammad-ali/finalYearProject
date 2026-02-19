@@ -1,13 +1,13 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Laptop, Search, ShoppingCart, User, Menu, X } from 'lucide-react';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import { Laptop, Search, ShoppingCart, User, Menu, X } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 /**
  * Customer Portal Layout
- * 
+ *
  * Discovery interface for laptop recommendations.
  * HCI Principles:
  * - Clear navigation hierarchy
@@ -17,13 +17,23 @@ import { cn } from '@/lib/utils';
  */
 export function CustomerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const location = useLocation();
+  const navigate = useNavigate();
 
   const navItems = [
-    { path: '/', label: 'Home' },
-    { path: '/browse', label: 'Browse' },
-    { path: '/recommendations', label: 'AI Recommendations' },
+    { path: "/", label: "Home" },
+    { path: "/browse", label: "Browse" },
+    { path: "/recommendations", label: "AI Recommendations" },
   ];
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/browse?search=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -45,10 +55,10 @@ export function CustomerLayout() {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'text-sm font-medium transition-colors hover:text-primary',
+                  "text-sm font-medium transition-colors hover:text-primary",
                   location.pathname === item.path
-                    ? 'text-primary'
-                    : 'text-muted-foreground'
+                    ? "text-primary"
+                    : "text-muted-foreground",
                 )}
               >
                 {item.label}
@@ -57,17 +67,22 @@ export function CustomerLayout() {
           </nav>
 
           {/* Search Bar */}
-          <div className="hidden md:flex items-center space-x-2">
+          {/* <form onSubmit={handleSearch} className="hidden md:flex items-center space-x-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
                 placeholder="Search laptops..."
                 className="w-64 pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-          </div>
-
+            <Button type="submit" size="sm" variant="ghost">
+              Search
+            </Button>
+          </form>
+*/}
           {/* User Actions */}
           <div className="hidden md:flex items-center space-x-4">
             <Button variant="ghost" size="icon">
@@ -105,10 +120,10 @@ export function CustomerLayout() {
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    'text-sm font-medium transition-colors hover:text-primary',
+                    "text-sm font-medium transition-colors hover:text-primary",
                     location.pathname === item.path
-                      ? 'text-primary'
-                      : 'text-muted-foreground'
+                      ? "text-primary"
+                      : "text-muted-foreground",
                   )}
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -116,14 +131,28 @@ export function CustomerLayout() {
                 </Link>
               ))}
             </nav>
-            <div className="flex flex-col space-y-2">
-              <Input type="search" placeholder="Search laptops..." />
-              <Button variant="gold" className="w-full" asChild>
-                <Link to="/vendor" onClick={() => setMobileMenuOpen(false)}>
-                  Vendor Portal
-                </Link>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearch(e);
+              }}
+              className="flex flex-col space-y-2"
+            >
+              <Input
+                type="search"
+                placeholder="Search laptops..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <Button type="submit" variant="gold" className="w-full">
+                Search
               </Button>
-            </div>
+            </form>
+            <Button variant="gold" className="w-full" asChild>
+              <Link to="/vendor" onClick={() => setMobileMenuOpen(false)}>
+                Vendor Portal
+              </Link>
+            </Button>
           </div>
         )}
       </header>
@@ -141,22 +170,22 @@ export function CustomerLayout() {
           </p>
           <div className="flex items-center space-x-4">
             <Link
-              to="#"
+              to="/browse"
               className="text-sm text-muted-foreground hover:text-primary"
             >
-              Privacy
+              Browse
             </Link>
             <Link
-              to="#"
+              to="/recommendations"
               className="text-sm text-muted-foreground hover:text-primary"
             >
-              Terms
+              Recommendations
             </Link>
             <Link
-              to="#"
+              to="/vendor"
               className="text-sm text-muted-foreground hover:text-primary"
             >
-              Contact
+              Vendor Portal
             </Link>
           </div>
         </div>

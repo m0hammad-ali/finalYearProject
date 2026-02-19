@@ -184,28 +184,37 @@ export const laptopsRoutes: FastifyPluginAsync = async (app) => {
 
     const result = await db.query(
       `
-      SELECT 
+      SELECT
         lm.model_id,
         lm.model_name,
         lm.series,
+        lm.short_description,
         b.brand_name,
+        b.brand_slug,
         hs.processor_model,
+        hs.processor_brand,
         hs.ram_gb,
         hs.storage_capacity_gb,
-        MIN(i.unit_price) as min_price
+        hs.gpu_type,
+        hs.gpu_model,
+        MIN(i.unit_price) as min_price,
+        MAX(i.unit_price) as max_price,
+        COUNT(DISTINCT i.inventory_id) as available_count
       FROM laptop_models lm
       JOIN brands b ON lm.brand_id = b.brand_id
       JOIN hardware_specs hs ON lm.spec_id = hs.spec_id
       LEFT JOIN inventory i ON lm.model_id = i.model_id AND i.is_available = true
-      WHERE 
+      WHERE
         lm.is_discontinued = false AND
         (
           lm.model_name ILIKE $1 OR
           lm.series ILIKE $1 OR
           b.brand_name ILIKE $1 OR
-          hs.processor_model ILIKE $1
+          hs.processor_model ILIKE $1 OR
+          hs.processor_brand ILIKE $1
         )
-      GROUP BY lm.model_id, b.brand_name, hs.processor_model, hs.ram_gb, hs.storage_capacity_gb
+      GROUP BY lm.model_id, b.brand_name, b.brand_slug, hs.processor_model, hs.processor_brand, hs.ram_gb, hs.storage_capacity_gb, hs.gpu_type, hs.gpu_model
+      ORDER BY min_price ASC
       LIMIT 20
     `,
       [`%${query}%`]
